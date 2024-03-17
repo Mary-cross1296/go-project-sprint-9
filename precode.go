@@ -9,21 +9,14 @@ import (
 	"time"
 )
 
-// Generator генерирует последовательность чисел 1,2,3 и т.д. и
-// отправляет их в канал ch. При этом после записи в канал для каждого числа
-// вызывается функция fn. Она служит для подсчёта количества и суммы
-// сгенерированных чисел.
 func Generator(ctx context.Context, ch chan<- int64, fn func(int64)) {
 	// 1. Функция Generator
-	var (
-		//mu sync.Mutex
-		i int64
-	)
+	var i int64
 	i = 1
 	for {
 		select {
 		case <-ctx.Done():
-			close(ch) //Закрытие канала после отмены контекста
+			close(ch)
 			return
 		case ch <- i:
 			fn(i)
@@ -32,7 +25,6 @@ func Generator(ctx context.Context, ch chan<- int64, fn func(int64)) {
 	}
 }
 
-// Worker читает число из канала in и пишет его в канал out.
 func Worker(in <-chan int64, out chan<- int64) {
 	// 2. Функция Worker
 	for num := range in {
@@ -49,32 +41,26 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	// для проверки будем считать количество и сумму отправленных чисел
 	var inputSum int64   // сумма сгенерированных чисел
 	var inputCount int64 // количество сгенерированных чисел
 
-	// генерируем числа, считая параллельно их количество и сумму
 	go Generator(ctx, chIn, func(i int64) {
 		atomic.AddInt64(&inputSum, i)
 		atomic.AddInt64(&inputCount, 1)
 	})
 
 	const NumOut = 5 // количество обрабатывающих горутин и каналов
-	// outs — слайс каналов, куда будут записываться числа из chIn
+
 	outs := make([]chan int64, NumOut)
 	for i := 0; i < NumOut; i++ {
-		// создаём каналы и для каждого из них вызываем горутину Worker
 		outs[i] = make(chan int64)
 		go Worker(chIn, outs[i])
 	}
 
-	// amounts — слайс, в который собирается статистика по горутинам
 	amounts := make([]int64, NumOut)
-	// chOut — канал, в который будут отправляться числа из горутин `outs[i]`
 	chOut := make(chan int64, NumOut)
 
 	var wg sync.WaitGroup
-	//var mu sync.Mutex
 
 	// 4. Собираем числа из каналов outs
 	for i, out := range outs {
@@ -89,9 +75,7 @@ func main() {
 	}
 
 	go func() {
-		// ждём завершения работы всех горутин для outs
 		wg.Wait()
-		// закрываем результирующий канал
 		close(chOut)
 	}()
 
